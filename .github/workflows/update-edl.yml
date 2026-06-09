@@ -1,0 +1,40 @@
+name: Update Ring AWS EDLs
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # every 6 hours
+  workflow_dispatch:
+
+jobs:
+  update-edls:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update ring-aws.txt (AMAZON + CLOUDFRONT)
+        run: |
+          curl -s https://ip-ranges.amazonaws.com/ip-ranges.json \
+          | jq -r '.prefixes[]
+              | select((.service=="AMAZON" or .service=="CLOUDFRONT")
+                       and (.region=="ap-southeast-2" or .region=="us-east-1" or .region=="us-west-2"))
+              | .ip_prefix' > ring-aws.txt
+
+      - name: Update ring-cloudfront.txt (CLOUDFRONT only)
+        run: |
+          curl -s https://ip-ranges.amazonaws.com/ip-ranges.json \
+          | jq -r '.prefixes[]
+              | select(.service=="CLOUDFRONT"
+                       and (.region=="ap-southeast-2" or .region=="us-east-1" or .region=="us-west-2"))
+              | .ip_prefix' > ring-cloudfront.txt
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add ring-aws.txt ring-cloudfront.txt
+            git commit -m "Auto-update Ring AWS EDLs"
+            git push
+          fi
